@@ -1,0 +1,21 @@
+# Rust build output
+/target/
+
+# Backup files created by rustfmt or editors
+**/*.rs.bk
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Profiling / coverage (llvm-cov, etc.)
+*.profraw
+*.profdata
+coverage/
