@@ -1,0 +1,5 @@
+# If `target/` is ever committed by mistake, keep it out of GitHub’s language bar (Linguist).
+target/** linguist-vendored
+
+# README doesn’t need to count as “the” project language
+*.md linguist-documentation
