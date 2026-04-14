@@ -45,8 +45,10 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                                     id,
                                     title: title.to_string(),
                                     done: false,
+                                    prioritized: false,
                                 },
                             );
+                            state.renumber_ids();
                             state.save(state_path)?;
                             list_state.select(Some(pos));
                         }
@@ -80,6 +82,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                         if let Some(i) = list_state.selected() {
                             if state.tasks.get(i).is_some() {
                                 state.tasks.remove(i);
+                                state.renumber_ids();
                                 state.save(state_path)?;
                                 if state.tasks.is_empty() {
                                     list_state.select(None);
@@ -92,9 +95,18 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                     }
                     KeyCode::Char('p') | KeyCode::Char('P') => {
                         if let Some(i) = list_state.selected() {
-                            if i > 0 && i < state.tasks.len() {
-                                let task = state.tasks.remove(i);
-                                state.tasks.insert(0, task);
+                            if i < state.tasks.len() {
+                                if i > 0 {
+                                    let task = state.tasks.remove(i);
+                                    state.tasks.insert(0, task);
+                                }
+                                for t in &mut state.tasks {
+                                    t.prioritized = false;
+                                }
+                                if let Some(head) = state.tasks.first_mut() {
+                                    head.prioritized = true;
+                                }
+                                state.renumber_ids();
                                 state.save(state_path)?;
                                 list_state.select(Some(0));
                             }
@@ -239,18 +251,30 @@ fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode:
 
 fn task_row(task: &Task, accent: Color, muted: Color, done_fg: Color) -> ListItem<'static> {
     let mark = if task.done { "[x]" } else { "[ ]" };
-    let mark_style = if task.done {
-        Style::default().fg(done_fg)
-    } else {
-        Style::default().fg(accent)
-    };
-    let id_style = Style::default().fg(muted);
-    let text_style = if task.done {
-        Style::default()
+    let rust_bold = Style::default()
+        .fg(accent)
+        .add_modifier(Modifier::BOLD);
+
+    let (mark_style, id_style, text_style) = if task.prioritized && !task.done {
+        (
+            rust_bold,
+            rust_bold,
+            Style::default()
+                .fg(accent)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else if task.done {
+        let mark_style = Style::default().fg(done_fg);
+        let text = Style::default()
             .fg(done_fg)
-            .add_modifier(Modifier::DIM | Modifier::CROSSED_OUT)
+            .add_modifier(Modifier::DIM | Modifier::CROSSED_OUT);
+        (mark_style, Style::default().fg(muted), text)
     } else {
-        Style::default().fg(Color::Rgb(230, 220, 210))
+        (
+            Style::default().fg(accent),
+            Style::default().fg(muted),
+            Style::default().fg(Color::Rgb(230, 220, 210)),
+        )
     };
 
     let line = Line::from(vec![

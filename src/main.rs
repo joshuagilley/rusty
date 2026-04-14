@@ -78,9 +78,11 @@ fn prompt_initial_tasks(state: &mut AppState, path: &PathBuf) -> Result<()> {
             id,
             title: trimmed.to_string(),
             done: false,
+            prioritized: false,
         });
     }
 
+    state.renumber_ids();
     state.save(path)?;
     Ok(())
 }
@@ -131,7 +133,9 @@ fn main() -> Result<()> {
                 id,
                 title: title.trim().to_string(),
                 done: false,
+                prioritized: false,
             });
+            state.renumber_ids();
             state.save(&path)?;
             println!("added task #{} — {}", id, title.trim());
         }
@@ -142,6 +146,7 @@ fn main() -> Result<()> {
             if state.tasks.len() == before {
                 anyhow::bail!("no task with id {}", id);
             }
+            state.renumber_ids();
             state.save(&path)?;
             println!("deleted task #{}", id);
         }

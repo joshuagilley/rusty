@@ -9,6 +9,9 @@ pub struct Task {
     pub id: u64,
     pub title: String,
     pub done: bool,
+    /// Set when you press `p` to pin to the top (bold in the UI).
+    #[serde(default)]
+    pub prioritized: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,7 +46,16 @@ impl AppState {
             state.save(path)?;
         }
 
+        state.renumber_ids();
+        state.save(path)?;
         Ok(state)
+    }
+
+    /// Assigns ids1..=n in current list order (matches row numbers in the UI / CLI).
+    pub fn renumber_ids(&mut self) {
+        for (i, t) in self.tasks.iter_mut().enumerate() {
+            t.id = (i + 1) as u64;
+        }
     }
 
     pub fn save(&self, path: &PathBuf) -> Result<()> {
