@@ -1,0 +1,1 @@
+/Volumes/Josh\ LaCie\ 2TB/development/rust/rusty/target/release/rusty: /Volumes/Josh\ LaCie\ 2TB/development/rust/rusty/src/main.rs /Volumes/Josh\ LaCie\ 2TB/development/rust/rusty/src/state.rs /Volumes/Josh\ LaCie\ 2TB/development/rust/rusty/src/ui.rs
