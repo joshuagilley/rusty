@@ -1,5 +1,13 @@
-# If `target/` is ever committed by mistake, keep it out of GitHub’s language bar (Linguist).
+# GitHub Linguist: only Rust sources count toward the language bar.
+# This avoids the repo being labeled “Makefile” / TOML when lockfiles or other files outweigh src/.
+* linguist-vendored
+*.rs linguist-vendored=false
+
+*.md linguist-documentation
+Cargo.lock linguist-generated
 target/** linguist-vendored
 
-# README doesn’t need to count as “the” project language
-*.md linguist-documentation
+# If a Makefile exists on the default branch, don’t let it define the repo language
+Makefile linguist-vendored
+makefile linguist-vendored
+GNUmakefile linguist-vendored
