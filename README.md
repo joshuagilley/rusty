@@ -1,10 +1,14 @@
 # rusty
 
-A small **daily** terminal to-do app written in Rust. You get a warm-themed [Ratatui](https://github.com/ratatui-org/ratatui) checklist for today’s tasks, plus a JSON file on disk that **resets when the local calendar day changes** (or when you clear it yourself).
+![rusty main TUI (mimic mode)](assets/rusty-tui.png)
+
+A small **daily** terminal to-do app written in Rust. You get a warm-themed [Ratatui](https://github.com/ratatui-org/ratatui) checklist for today’s tasks, plus a JSON file on disk keyed to the **local calendar day**.
+
+Each new day, rusty treats yesterday as closed and moves you to **today**. If the saved `date` in `state.json` is behind today, the app opens a **rollover** screen first: a short recap of yesterday (totals and completion), then every **unfinished** task from that day. You choose what carries forward—**Space** toggles each row, **Y** confirms and builds today’s list from the checked items, **N** or **Esc** starts today with none of them. That way you explicitly decide which “missed” open tasks roll into the new day instead of silently dragging the whole file forward.
 
 ## Features
 
-- **First run of the day** (or after a reset): type tasks line by line; enter `done` or `finish` to save and open the UI.
+- **Startup**: when the saved `date` is **not** today, that rollover runs once, then the main TUI. **`--ratatui`** runs the same preview only when the file’s date is not today (same calendar day → straight to the TUI, no disk writes). With an empty list, press **a** to add the first task.
 - **TUI**: move with **j** / **k** or arrow keys, **Space** / **Enter** toggles done, **q** quits (state is saved).
 - **In the UI**: **a** adds a task after the selection, **d** deletes the selected task, **p** moves the selected task to the top.
 - **CLI**: `rusty add "…"`, `rusty delete <id>` (alias `rusty rm <id>`).
@@ -35,7 +39,7 @@ Tasks live in `state.json` under the app’s **local data** directory from the [
 - **Linux**: `~/.local/share/rusty/state.json` (or `$XDG_DATA_HOME/rusty/state.json`)
 - **Windows**: `%LOCALAPPDATA%\rusty\rusty\data\state.json` (pattern from the [`directories`](https://docs.rs/directories) crate)
 
-The file records today’s date and the task list; if the date is not **today** when the app loads, the list is cleared and the file is rewritten for a fresh day.
+The file records the session **date** and the task list. On a **new calendar day**, the rollover flow above runs (normal mode then saves today’s date and your carried tasks); on the **same day**, relaunch goes straight to the checklist after normal housekeeping (renumbering, etc.).
 
 ## License
 

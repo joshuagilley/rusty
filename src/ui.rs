@@ -12,7 +12,12 @@ enum UiMode {
     AddTask { insert_at: usize, buffer: String },
 }
 
-pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: &std::path::PathBuf) -> Result<()> {
+pub fn run_ui(
+    terminal: &mut DefaultTerminal,
+    state: &mut AppState,
+    state_path: &std::path::PathBuf,
+    mimic: bool,
+) -> Result<()> {
     let mut list_state = ListState::default();
     if !state.tasks.is_empty() {
         list_state.select(Some(0));
@@ -21,7 +26,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
     let mut mode = UiMode::List;
 
     loop {
-        terminal.draw(|f| render(f, state, &mut list_state, &mode))?;
+        terminal.draw(|f| render(f, state, &mut list_state, &mode, mimic))?;
 
         let ev = event::read()?;
         if let Event::Key(key) = ev {
@@ -49,7 +54,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                                 },
                             );
                             state.renumber_ids();
-                            state.save(state_path)?;
+                            state.persist_to_disk(state_path, mimic)?;
                             list_state.select(Some(pos));
                         }
                         mode = UiMode::List;
@@ -64,7 +69,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                 },
                 UiMode::List => match key.code {
                     KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        state.save(state_path)?;
+                        state.persist_to_disk(state_path, mimic)?;
                         break;
                     }
                     KeyCode::Char('a') | KeyCode::Char('A') => {
@@ -83,7 +88,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                             if state.tasks.get(i).is_some() {
                                 state.tasks.remove(i);
                                 state.renumber_ids();
-                                state.save(state_path)?;
+                                state.persist_to_disk(state_path, mimic)?;
                                 if state.tasks.is_empty() {
                                     list_state.select(None);
                                 } else {
@@ -107,7 +112,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                                     head.prioritized = true;
                                 }
                                 state.renumber_ids();
-                                state.save(state_path)?;
+                                state.persist_to_disk(state_path, mimic)?;
                                 list_state.select(Some(0));
                             }
                         }
@@ -116,7 +121,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
                         if let Some(i) = list_state.selected() {
                             if let Some(t) = state.tasks.get_mut(i) {
                                 t.done = !t.done;
-                                state.save(state_path)?;
+                                state.persist_to_disk(state_path, mimic)?;
                             }
                         }
                     }
@@ -142,7 +147,7 @@ pub fn run_ui(terminal: &mut DefaultTerminal, state: &mut AppState, state_path: 
     Ok(())
 }
 
-fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode: &UiMode) {
+fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode: &UiMode, mimic: bool) {
     let area = frame.area();
 
     let header_style = Style::default()
@@ -152,10 +157,18 @@ fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode:
     let muted = Color::Rgb(139, 125, 107);
     let done_fg = Color::Rgb(106, 153, 85);
 
-    let title = Line::from(vec![
-        Span::styled("rusty", header_style),
-        Span::styled(" — today's forge", Style::default().fg(muted)),
-    ]);
+    let title = if mimic {
+        Line::from(vec![
+            Span::styled("rusty", header_style),
+            Span::styled(" — today's forge", Style::default().fg(muted)),
+            Span::styled("  [mimic]", Style::default().fg(accent).add_modifier(Modifier::DIM)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("rusty", header_style),
+            Span::styled(" — today's forge", Style::default().fg(muted)),
+        ])
+    };
 
     let date_line = Line::from(vec![
         Span::styled("date ", Style::default().fg(muted)),
@@ -187,6 +200,8 @@ fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode:
 
     let footer_h = if matches!(mode, UiMode::AddTask { .. }) {
         2
+    } else if mimic {
+        2
     } else {
         1
     };
@@ -208,12 +223,17 @@ fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode:
         .map(|t| task_row(t, accent, muted, done_fg))
         .collect();
 
+    let list_title = if state.tasks.is_empty() {
+        " tasks · a adds first "
+    } else {
+        " tasks "
+    };
     let list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Rgb(100, 90, 80)))
-                .title(Span::styled(" tasks ", Style::default().fg(accent))),
+                .title(Span::styled(list_title, Style::default().fg(accent))),
         )
         .highlight_style(
             Style::default()
@@ -226,11 +246,25 @@ fn render(frame: &mut Frame, state: &AppState, list_state: &mut ListState, mode:
 
     match mode {
         UiMode::List => {
-            let footer = Line::from(vec![Span::styled(
-                "CLI: rusty add \"…\" · rusty delete <id> · rusty --reset (-r) · rusty reset",
-                Style::default().fg(muted),
-            )]);
-            frame.render_widget(Paragraph::new(footer), chunks[3]);
+            if mimic {
+                let lines = vec![
+                    Line::from(Span::styled(
+                        "mimic — state.json is not written (disk unchanged)",
+                        Style::default().fg(accent).add_modifier(Modifier::ITALIC),
+                    )),
+                    Line::from(vec![Span::styled(
+                        "CLI: rusty add \"…\" · rusty delete <id> · rusty --reset (-r) · rusty reset",
+                        Style::default().fg(muted),
+                    )]),
+                ];
+                frame.render_widget(Paragraph::new(lines), chunks[3]);
+            } else {
+                let footer = Line::from(vec![Span::styled(
+                    "CLI: rusty add \"…\" · rusty delete <id> · rusty --reset (-r) · rusty reset",
+                    Style::default().fg(muted),
+                )]);
+                frame.render_widget(Paragraph::new(footer), chunks[3]);
+            }
         }
         UiMode::AddTask { buffer, .. } => {
             let hint = Line::from(vec![

@@ -20,6 +20,13 @@ pub struct AppState {
     pub tasks: Vec<Task>,
 }
 
+/// Interactive `rusty` startup: [`NeedsRollover`] when the saved calendar day is behind today.
+pub enum SessionStart {
+    Fresh(AppState),
+    Today(AppState),
+    NeedsRollover(AppState),
+}
+
 impl AppState {
     pub fn empty_today() -> Self {
         Self {
@@ -28,7 +35,32 @@ impl AppState {
         }
     }
 
-    pub fn load_or_reset(path: &PathBuf) -> Result<Self> {
+    pub fn read_from_disk(path: &PathBuf) -> Result<Self> {
+        let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        serde_json::from_str(&raw).with_context(|| "parse state file")
+    }
+
+    pub fn read_session_start(path: &PathBuf) -> Result<SessionStart> {
+        let today = today_string();
+
+        if !path.exists() {
+            let state = Self::empty_today();
+            state.save(path)?;
+            return Ok(SessionStart::Fresh(state));
+        }
+
+        let mut state = Self::read_from_disk(path)?;
+        if state.date != today {
+            return Ok(SessionStart::NeedsRollover(state));
+        }
+
+        state.renumber_ids();
+        state.save(path)?;
+        Ok(SessionStart::Today(state))
+    }
+
+    /// `rusty add` / `rusty delete`: if the file is for a past day, start a fresh today without the recap UI.
+    pub fn load_for_cli(path: &PathBuf) -> Result<Self> {
         let today = today_string();
 
         if !path.exists() {
@@ -43,7 +75,6 @@ impl AppState {
 
         if state.date != today {
             state = Self::empty_today();
-            state.save(path)?;
         }
 
         state.renumber_ids();
@@ -65,6 +96,25 @@ impl AppState {
         let raw = serde_json::to_string_pretty(self)?;
         fs::write(path, raw).with_context(|| format!("write {}", path.display()))?;
         Ok(())
+    }
+
+    /// Skip disk when `mimic` is true (`--ratatui` preview).
+    pub fn persist_to_disk(&self, path: &PathBuf, mimic: bool) -> Result<()> {
+        if mimic {
+            Ok(())
+        } else {
+            self.save(path)
+        }
+    }
+
+    /// Load state for UI preview only: no rollover, no rewrites, file left as-is on disk.
+    pub fn read_mimic(path: &PathBuf) -> Result<Self> {
+        if !path.exists() {
+            return Ok(Self::empty_today());
+        }
+        let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        let state: AppState = serde_json::from_str(&raw).with_context(|| "parse state file")?;
+        Ok(state)
     }
 
     pub fn next_id(&self) -> u64 {
